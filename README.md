@@ -24,6 +24,25 @@ OpenWork Linux é um MVP para preparar workstations Linux focadas em usuários S
 - `openwork/profiles/sap-tecnico.yml`: perfil inicial que reúne módulos úteis para um setup SAP técnico.
 - Interface com botão `Configurar` que executa scripts de configuração adicionais quando presentes.
 
+## Requisitos de sistema
+
+Antes de criar o ambiente virtual, instale as dependências do sistema necessárias para clonar o repositório e criar o `venv`.
+
+Para Debian/Ubuntu e derivados:
+
+```bash
+sudo apt update
+sudo apt install git python3 python3-venv python3-pip
+```
+
+Para Fedora/RHEL/CentOS:
+
+```bash
+sudo dnf install git python3 python3-venv python3-pip
+```
+
+Para outras distribuições, use o gerenciador de pacotes padrão equivalente.
+
 ## Uso recomendado
 
 1. Crie e ative um ambiente virtual:
@@ -32,6 +51,18 @@ OpenWork Linux é um MVP para preparar workstations Linux focadas em usuários S
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+2. Se você quiser garantir que o GUI tenha sido instalado corretamente:
+
+```bash
+pip install PySide6>=6.5
+```
+
+3. Execute a aplicação:
+
+```bash
+python3 -m openwork.main
 ```
 
 2. Execute a aplicação:
