@@ -1,0 +1,4 @@
+PyYAML>=6.0
+# Optional GUI
+PySide6>=6.5 ; extra == 'gui'
+

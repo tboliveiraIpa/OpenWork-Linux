@@ -1,0 +1,12 @@
+name: "Test Module"
+id: "test_module"
+category: "Dev"
+description: "Módulo de teste que apenas simula instalação."
+install:
+  type: "custom"
+validate:
+  type: "script"
+  path: "validate.sh"
+requires_root: false
+status_checks:
+  - command: "echo status ok"

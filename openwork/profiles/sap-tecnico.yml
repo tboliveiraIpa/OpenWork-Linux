@@ -1,0 +1,8 @@
+name: "SAP Técnico"
+id: "sap-tecnico"
+description: "Perfil inicial com ferramentas básicas para suporte SAP técnico."
+modules:
+  - flameshot
+  - brave
+  - teams_for_linux
+  - onlyoffice

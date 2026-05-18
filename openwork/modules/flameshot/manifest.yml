@@ -1,0 +1,14 @@
+name: "Flameshot"
+id: "flameshot"
+category: "Utilitários"
+description: "Ferramenta de captura de tela poderosa e simples."
+install:
+  type: "apt"
+  packages:
+    - "flameshot"
+validate:
+  type: "script"
+  path: "validate.sh"
+requires_root: false
+status_checks:
+  - command: "which flameshot"
