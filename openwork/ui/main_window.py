@@ -9,6 +9,9 @@ try:
 
 	class TerminalDialog(QtWidgets.QDialog):
 		"""Modal dialog that displays command output in a terminal-like widget."""
+		# Custom signal for thread-safe output updates
+		line_received = QtCore.Signal(str)
+		
 		def __init__(self, title: str, parent=None):
 			super().__init__(parent)
 			self.setWindowTitle(title)
@@ -49,13 +52,16 @@ try:
 			
 			layout.addLayout(btn_layout)
 			
+			# Connect signal to slot (runs in main thread)
+			self.line_received.connect(self._on_line_received, QtCore.Qt.QueuedConnection)
+			
 			# Timer for polling completion event
 			self.completion_timer = QtCore.QTimer()
 			self.completion_timer.timeout.connect(self._check_completion)
 			self.completion_event = None
 
-		def append_line(self, text: str):
-			"""Append a line to the terminal output."""
+		def _on_line_received(self, text: str):
+			"""Slot called when a line is received (runs in main Qt thread)."""
 			cursor = self.output.textCursor()
 			cursor.movePosition(QtGui.QTextCursor.End)
 			self.output.setTextCursor(cursor)
@@ -64,9 +70,11 @@ try:
 			# Auto-scroll to bottom
 			scrollbar = self.output.verticalScrollBar()
 			scrollbar.setValue(scrollbar.maximum())
-			
-			# Process events to keep UI responsive
-			QtCore.QCoreApplication.processEvents()
+
+		def append_line(self, text: str):
+			"""Append a line to the terminal output. Can be called from any thread."""
+			# Emit signal (thread-safe) instead of directly updating widget
+			self.line_received.emit(text)
 
 		def set_completion_event(self, event):
 			"""Register a threading.Event that signals when operation is complete.
