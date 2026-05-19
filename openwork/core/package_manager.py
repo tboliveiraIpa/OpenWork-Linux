@@ -16,7 +16,8 @@ class BasePackageManager(ABC):
 		raise NotImplementedError()
 
 	@abstractmethod
-	def install(self, packages: List[str]) -> bool:
+	def install(self, packages: List[str], on_line: Optional[Callable[[str], None]] = None,
+				ask_password: Optional[Callable[[str], str]] = None) -> bool:
 		raise NotImplementedError()
 
 	@abstractmethod
@@ -42,12 +43,21 @@ class AptPackageManager(BasePackageManager):
 		except subprocess.CalledProcessError:
 			return False
 
-	def update(self) -> bool:
+	def update(self, on_line: Optional[Callable[[str], None]] = None,
+			   ask_password: Optional[Callable[[str], str]] = None) -> bool:
 		return subprocess.call(["sudo", "apt-get", "update"]) == 0
 
-	def install(self, packages: List[str]) -> bool:
-		cmd = ["sudo", "apt-get", "install", "-y"] + packages
-		return subprocess.call(cmd) == 0
+	def install(self, packages: List[str], on_line: Optional[Callable[[str], None]] = None,
+				ask_password: Optional[Callable[[str], str]] = None) -> bool:
+		cmd = "sudo apt-get install -y " + " ".join(packages)
+		# try to use Executor interactive if available to capture prompts
+		try:
+			from .executor import Executor
+			ex = Executor()
+			rc = ex.run_interactive(cmd, on_line=on_line, on_request_password=ask_password)
+			return rc == 0
+		except Exception:
+			return subprocess.call(["sudo", "apt-get", "install", "-y"] + packages) == 0
 
 	def install_local_package(self, file_path: str) -> bool:
 		return subprocess.call(["sudo", "dpkg", "-i", file_path]) == 0
@@ -80,9 +90,16 @@ class DnfPackageManager(BasePackageManager):
 	def update(self) -> bool:
 		return subprocess.call(["sudo", "dnf", "makecache"]) == 0
 
-	def install(self, packages: List[str]) -> bool:
-		cmd = ["sudo", "dnf", "install", "-y"] + packages
-		return subprocess.call(cmd) == 0
+	def install(self, packages: List[str], on_line: Optional[Callable[[str], None]] = None,
+				ask_password: Optional[Callable[[str], str]] = None) -> bool:
+		cmd = "sudo dnf install -y " + " ".join(packages)
+		try:
+			from .executor import Executor
+			ex = Executor()
+			rc = ex.run_interactive(cmd, on_line=on_line, on_request_password=ask_password)
+			return rc == 0
+		except Exception:
+			return subprocess.call(["sudo", "dnf", "install", "-y"] + packages) == 0
 
 	def install_local_package(self, file_path: str) -> bool:
 		return subprocess.call(["sudo", "rpm", "-Uvh", file_path]) == 0

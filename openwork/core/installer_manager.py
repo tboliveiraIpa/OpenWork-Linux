@@ -22,7 +22,8 @@ class InstallerManager:
         else:
             self.pm = AptPackageManager()
 
-    def install_module(self, module: dict, on_line: Optional[Callable[[str], None]] = None) -> None:
+    def install_module(self, module: dict, on_line: Optional[Callable[[str], None]] = None,
+                       ask_password: Optional[Callable[[str], str]] = None) -> None:
         def _run():
             name = module.get('id') or module.get('name')
             if on_line:
@@ -36,7 +37,7 @@ class InstallerManager:
                 if packages:
                     if on_line:
                         on_line(f"Installing packages: {' '.join(packages)}")
-                    ok = self.pm.install(packages)
+                    ok = self.pm.install(packages, on_line=on_line, ask_password=ask_password)
                     if ok:
                         if on_line:
                             on_line(f"Installed packages: {' '.join(packages)}")
@@ -47,14 +48,14 @@ class InstallerManager:
                     # fallback to local script
                     script = os.path.join(module.get('_path', ''), 'install.sh')
                     if os.path.exists(script):
-                        self.executor.run(script, cwd=module.get('_path'), on_line=on_line)
+                        self.executor.run_interactive(script, cwd=module.get('_path'), on_line=on_line, on_request_password=ask_password)
                     else:
                         if on_line:
                             on_line('No install instructions found')
             elif itype == 'custom':
                 script = os.path.join(module.get('_path', ''), 'install.sh')
                 if os.path.exists(script):
-                    self.executor.run(script, cwd=module.get('_path'), on_line=on_line)
+                    self.executor.run_interactive(script, cwd=module.get('_path'), on_line=on_line, on_request_password=ask_password)
                 else:
                     if on_line:
                         on_line('No custom installer found')
@@ -62,7 +63,7 @@ class InstallerManager:
                 # default: try script
                 script = os.path.join(module.get('_path', ''), 'install.sh')
                 if os.path.exists(script):
-                    self.executor.run(script, cwd=module.get('_path'), on_line=on_line)
+                    self.executor.run_interactive(script, cwd=module.get('_path'), on_line=on_line, on_request_password=ask_password)
                 else:
                     if on_line:
                         on_line('Unsupported install type or no installer available')
@@ -70,7 +71,8 @@ class InstallerManager:
         t = threading.Thread(target=_run, daemon=True)
         t.start()
 
-    def validate_module(self, module: dict, on_line: Optional[Callable[[str], None]] = None) -> None:
+    def validate_module(self, module: dict, on_line: Optional[Callable[[str], None]] = None,
+                        ask_password: Optional[Callable[[str], str]] = None) -> None:
         def _run():
             name = module.get('id') or module.get('name')
             if on_line:
@@ -80,7 +82,7 @@ class InstallerManager:
             if vtype == 'script':
                 script = os.path.join(module.get('_path', ''), val.get('path', 'validate.sh'))
                 if os.path.exists(script):
-                    self.executor.run(script, cwd=module.get('_path'), on_line=on_line)
+                    self.executor.run_interactive(script, cwd=module.get('_path'), on_line=on_line, on_request_password=ask_password)
                 else:
                     if on_line:
                         on_line('Validate script not found')
@@ -98,7 +100,8 @@ class InstallerManager:
         t = threading.Thread(target=_run, daemon=True)
         t.start()
 
-    def install_modules(self, modules_list: list, on_line: Optional[Callable[[str], None]] = None) -> None:
+    def install_modules(self, modules_list: list, on_line: Optional[Callable[[str], None]] = None,
+                        ask_password: Optional[Callable[[str], str]] = None) -> None:
         """Install a list of module dicts sequentially in a background thread."""
         def _run():
             for module in modules_list:
@@ -114,7 +117,7 @@ class InstallerManager:
                     if packages:
                         if on_line:
                             on_line(f"Installing packages: {' '.join(packages)}")
-                        ok = self.pm.install(packages)
+                        ok = self.pm.install(packages, on_line=on_line, ask_password=ask_password)
                         if ok:
                             if on_line:
                                 on_line(f"Installed packages: {' '.join(packages)}")
@@ -124,14 +127,14 @@ class InstallerManager:
                     else:
                         script = os.path.join(module.get('_path', ''), 'install.sh')
                         if os.path.exists(script):
-                            self.executor.run(script, cwd=module.get('_path'), on_line=on_line)
+                            self.executor.run_interactive(script, cwd=module.get('_path'), on_line=on_line, on_request_password=ask_password)
                         else:
                             if on_line:
                                 on_line('No install instructions found')
                 else:
                     script = os.path.join(module.get('_path', ''), 'install.sh')
                     if os.path.exists(script):
-                        self.executor.run(script, cwd=module.get('_path'), on_line=on_line)
+                        self.executor.run_interactive(script, cwd=module.get('_path'), on_line=on_line, on_request_password=ask_password)
                     else:
                         if on_line:
                             on_line('Unsupported install type or no installer available')
@@ -142,7 +145,8 @@ class InstallerManager:
         t = threading.Thread(target=_run, daemon=True)
         t.start()
 
-    def install_profile(self, profile: dict, modules_map: dict, on_line: Optional[Callable[[str], None]] = None) -> None:
+    def install_profile(self, profile: dict, modules_map: dict, on_line: Optional[Callable[[str], None]] = None,
+                        ask_password: Optional[Callable[[str], str]] = None) -> None:
         """Install all modules referenced by a profile. `modules_map` is id->module dict."""
         module_ids = profile.get('modules') or []
         modules_to_install = []
@@ -159,4 +163,4 @@ class InstallerManager:
                 on_line('No modules to install for profile')
             return
 
-        self.install_modules(modules_to_install, on_line=on_line)
+        self.install_modules(modules_to_install, on_line=on_line, ask_password=ask_password)

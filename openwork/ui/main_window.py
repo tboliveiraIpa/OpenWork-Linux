@@ -3,6 +3,8 @@ try:
 	from PySide6 import QtWidgets, QtCore, QtGui
 	from functools import partial
 	import os
+	import threading
+	from typing import Optional
 
 
 	class MainWindow(QtWidgets.QMainWindow):
@@ -152,14 +154,14 @@ try:
 				self.append_log('Installer não disponível')
 				return
 			self.append_log(f"Iniciando instalação: {module.get('name')}")
-			self.installer.install_module(module, on_line=self.append_log)
+			self.installer.install_module(module, on_line=self.append_log, ask_password=self._ask_sudo_password)
 
 		def _validate_module(self, module):
 			if not self.installer:
 				self.append_log('Installer não disponível')
 				return
 			self.append_log(f"Validando: {module.get('name')}")
-			self.installer.validate_module(module, on_line=self.append_log)
+			self.installer.validate_module(module, on_line=self.append_log, ask_password=self._ask_sudo_password)
 
 		def _on_profile_selected(self, current, previous):
 			self.profile_modules_list.clear()
@@ -203,7 +205,7 @@ try:
 				script_path = os.path.join(scripts_dir, it.text())
 				self.append_log(f'Executando script de configuração: {it.text()}')
 				if self.installer and hasattr(self.installer, 'executor'):
-					self.installer.executor.run(script_path, cwd=scripts_dir, on_line=self.append_log)
+					self.installer.executor.run_interactive(script_path, cwd=scripts_dir, on_line=self.append_log, on_request_password=self._ask_sudo_password)
 				else:
 					import subprocess
 					subprocess.Popen(['bash', script_path])
@@ -218,7 +220,27 @@ try:
 				self.append_log('Nenhum perfil selecionado ou instalador ausente')
 				return
 			profile = it.data(QtCore.Qt.UserRole)
-			self.installer.install_profile(profile, self.modules_by_id, on_line=self.append_log)
+			self.installer.install_profile(profile, self.modules_by_id, on_line=self.append_log, ask_password=self._ask_sudo_password)
+
+		def _ask_sudo_password(self, prompt: str) -> Optional[str]:
+			# If called from GUI thread, show dialog directly
+			if QtCore.QThread.currentThread() == self.thread():
+				pw, ok = QtWidgets.QInputDialog.getText(self, 'Senha sudo', prompt, QtWidgets.QLineEdit.Password)
+				return pw if ok else None
+
+			# Called from a background thread: schedule dialog on GUI thread and wait
+			res = {'pw': None}
+			evt = threading.Event()
+
+			def run_dialog():
+				pw, ok = QtWidgets.QInputDialog.getText(self, 'Senha sudo', prompt, QtWidgets.QLineEdit.Password)
+				if ok:
+					res['pw'] = pw
+				evt.set()
+
+			QtCore.QTimer.singleShot(0, run_dialog)
+			evt.wait()
+			return res.get('pw')
 
 		def append_log(self, line: str):
 			self.log_view.append(line)
