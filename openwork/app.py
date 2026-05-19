@@ -34,6 +34,7 @@ def run_app():
 	except Exception as e:
 		logger.error(f'GUI not available: {e}')
 		print('OpenWork readiness report written. GUI not available or failed to start.')
+		print(f'GUI error: {e}')
 
 
 if __name__ == '__main__':

@@ -43,6 +43,13 @@ sudo dnf install git python3 python3-venv python3-pip
 
 Para outras distribuições, use o gerenciador de pacotes padrão equivalente.
 
+## Requisitos de GUI
+
+A interface gráfica requer um ambiente de exibição válido. Em uma VM sem sessão gráfica, o aplicativo ainda gera o relatório de readiness, mas a GUI não será exibida.
+
+- Use uma VM com desktop instalado (GNOME, KDE, XFCE, etc.)
+- Ou use X11/Wayland forwarding se estiver conectado por SSH
+
 ## Uso recomendado
 
 1. Crie e ative um ambiente virtual:
