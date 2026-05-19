@@ -7,19 +7,26 @@ try:
 	from typing import Optional
 
 
-	class TerminalDialog(QtWidgets.QDialog):
-		"""Modal dialog that displays command output in a terminal-like widget."""
+	class TerminalWidget(QtWidgets.QWidget):
+		"""Terminal-like widget for displaying command output (embeddable in main window)."""
 		# Custom signal for thread-safe output updates
 		line_received = QtCore.Signal(str)
+		# Signal emitted when operation completes
+		operation_completed = QtCore.Signal()
 		
 		def __init__(self, title: str, parent=None):
 			super().__init__(parent)
-			self.setWindowTitle(title)
-			self.resize(900, 550)
-			self.setModal(True)
 
 			layout = QtWidgets.QVBoxLayout(self)
 			layout.setContentsMargins(0, 0, 0, 0)
+
+			# Title bar
+			title_bar = QtWidgets.QHBoxLayout()
+			title_label = QtWidgets.QLabel(title)
+			title_label.setStyleSheet("font-weight: bold; padding: 8px;")
+			title_bar.addWidget(title_label)
+			title_bar.addStretch()
+			layout.addLayout(title_bar)
 
 			# Terminal-like output area with better styling
 			self.output = QtWidgets.QPlainTextEdit()
@@ -41,16 +48,6 @@ try:
 				}
 			""")
 			layout.addWidget(self.output)
-
-			# Bottom controls
-			btn_layout = QtWidgets.QHBoxLayout()
-			btn_layout.addStretch()
-			
-			btn_close = QtWidgets.QPushButton('Fechar')
-			btn_close.clicked.connect(self.accept)
-			btn_layout.addWidget(btn_close)
-			
-			layout.addLayout(btn_layout)
 			
 			# Connect signal to slot (runs in main thread)
 			self.line_received.connect(self._on_line_received, QtCore.Qt.QueuedConnection)
@@ -77,16 +74,15 @@ try:
 			self.line_received.emit(text)
 
 		def set_completion_event(self, event):
-			"""Register a threading.Event that signals when operation is complete.
-			When the event is set, the dialog will auto-close."""
+			"""Register a threading.Event that signals when operation is complete."""
 			self.completion_event = event
 			self.completion_timer.start(100)  # Poll every 100ms
 
 		def _check_completion(self):
-			"""Check if completion event is set, and close dialog if so."""
+			"""Check if completion event is set, and emit signal if so."""
 			if self.completion_event and self.completion_event.is_set():
 				self.completion_timer.stop()
-				self.accept()
+				self.operation_completed.emit()
 
 
 	class MainWindow(QtWidgets.QMainWindow):
@@ -104,6 +100,10 @@ try:
 			self.modules = modules
 			self.profiles = profiles
 			self.modules_by_id = {m.get('id'): m for m in modules}
+			
+			# Track current terminal widget and modules layout
+			self.current_terminal_widget = None
+			self.modules_page_layout = None
 
 			# stacked pages
 			self.stack = QtWidgets.QStackedWidget()
@@ -146,7 +146,7 @@ try:
 
 			# Modules page
 			modules_page = QtWidgets.QWidget()
-			m_layout = QtWidgets.QHBoxLayout(modules_page)
+			self.modules_page_layout = QtWidgets.QHBoxLayout(modules_page)
 
 			left = QtWidgets.QWidget()
 			left_layout = QtWidgets.QVBoxLayout(left)
@@ -176,30 +176,34 @@ try:
 			scroll_content.setLayout(scroll_layout)
 			scroll.setWidget(scroll_content)
 			left_layout.addWidget(scroll)
-			m_layout.addWidget(left, 1)
+			self.modules_page_layout.addWidget(left, 1)
 
 			# logs on right
 			self.log_view = QtWidgets.QTextEdit()
 			self.log_view.setReadOnly(True)
-			m_layout.addWidget(self.log_view, 2)
+			self.modules_page_layout.addWidget(self.log_view, 2)
 
 			self.stack.addWidget(modules_page)
 
 			# Profiles page
 			profiles_page = QtWidgets.QWidget()
-			p_layout = QtWidgets.QHBoxLayout(profiles_page)
+			self.profiles_page_layout = QtWidgets.QHBoxLayout(profiles_page)
 			self.profile_list = QtWidgets.QListWidget()
 			self.profile_modules_list = QtWidgets.QListWidget()
 			left_p = QtWidgets.QVBoxLayout()
 			left_p.addWidget(QtWidgets.QLabel('Perfis'))
 			left_p.addWidget(self.profile_list)
-			right_p = QtWidgets.QVBoxLayout()
+			
+			# Right panel as a container widget so we can swap it with terminal
+			self.profile_right_panel = QtWidgets.QWidget()
+			right_p = QtWidgets.QVBoxLayout(self.profile_right_panel)
 			right_p.addWidget(QtWidgets.QLabel('Módulos do perfil'))
 			right_p.addWidget(self.profile_modules_list)
 			self.btn_install_profile = QtWidgets.QPushButton('Instalar Perfil')
 			right_p.addWidget(self.btn_install_profile)
-			p_layout.addLayout(left_p, 1)
-			p_layout.addLayout(right_p, 2)
+			
+			self.profiles_page_layout.addLayout(left_p, 1)
+			self.profiles_page_layout.addWidget(self.profile_right_panel, 2)
 
 			self.stack.addWidget(profiles_page)
 
@@ -237,13 +241,29 @@ try:
 				return
 
 			name = module.get('name')
-			term = TerminalDialog(f"Instalando: {name}", parent=self)
+			term = TerminalWidget(f"Instalando: {name}", parent=self)
 			term.append_line(f">>> Iniciando instalação: {name}")
 			term.append_line("")
 
+			# Replace log view with terminal widget
+			self.modules_page_layout.replaceWidget(self.log_view, term)
+			self.log_view.hide()
+			term.show()
+			self.current_terminal_widget = term
+
+			# Start installation
 			done_event = self.installer.install_module(module, on_line=term.append_line, ask_password=self._ask_sudo_password)
 			term.set_completion_event(done_event)
-			term.exec()
+			
+			# When operation completes, switch back to log view
+			def _on_completion():
+				if self.current_terminal_widget is term:
+					self.modules_page_layout.replaceWidget(term, self.log_view)
+					term.hide()
+					self.log_view.show()
+					self.current_terminal_widget = None
+			
+			term.operation_completed.connect(_on_completion)
 
 		def _validate_module(self, module):
 			if not self.installer:
@@ -251,13 +271,29 @@ try:
 				return
 
 			name = module.get('name')
-			term = TerminalDialog(f"Validando: {name}", parent=self)
+			term = TerminalWidget(f"Validando: {name}", parent=self)
 			term.append_line(f">>> Iniciando validação: {name}")
 			term.append_line("")
 
+			# Replace log view with terminal widget
+			self.modules_page_layout.replaceWidget(self.log_view, term)
+			self.log_view.hide()
+			term.show()
+			self.current_terminal_widget = term
+
+			# Start validation
 			done_event = self.installer.validate_module(module, on_line=term.append_line, ask_password=self._ask_sudo_password)
 			term.set_completion_event(done_event)
-			term.exec()
+			
+			# When operation completes, switch back to log view
+			def _on_completion():
+				if self.current_terminal_widget is term:
+					self.modules_page_layout.replaceWidget(term, self.log_view)
+					term.hide()
+					self.log_view.show()
+					self.current_terminal_widget = None
+			
+			term.operation_completed.connect(_on_completion)
 
 		def _on_profile_selected(self, current, previous):
 			self.profile_modules_list.clear()
@@ -318,13 +354,29 @@ try:
 			profile = it.data(QtCore.Qt.UserRole)
 
 			name = profile.get('name', 'Perfil')
-			term = TerminalDialog(f"Instalando Perfil: {name}", parent=self)
+			term = TerminalWidget(f"Instalando Perfil: {name}", parent=self)
 			term.append_line(f">>> Iniciando instalação do perfil: {name}")
 			term.append_line("")
 
+			# Replace right panel with terminal widget
+			self.profiles_page_layout.replaceWidget(self.profile_right_panel, term)
+			self.profile_right_panel.hide()
+			term.show()
+			self.current_terminal_widget = term
+
+			# Start installation
 			done_event = self.installer.install_profile(profile, self.modules_by_id, on_line=term.append_line, ask_password=self._ask_sudo_password)
 			term.set_completion_event(done_event)
-			term.exec()
+			
+			# When operation completes, switch back to right panel
+			def _on_completion():
+				if self.current_terminal_widget is term:
+					self.profiles_page_layout.replaceWidget(term, self.profile_right_panel)
+					term.hide()
+					self.profile_right_panel.show()
+					self.current_terminal_widget = None
+			
+			term.operation_completed.connect(_on_completion)
 
 		def _ask_sudo_password(self, prompt: str) -> Optional[str]:
 			# If called from GUI thread, show dialog directly
