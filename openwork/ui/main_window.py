@@ -7,6 +7,44 @@ try:
 	from typing import Optional
 
 
+	class TerminalDialog(QtWidgets.QDialog):
+		"""Modal dialog that displays command output in a terminal-like widget."""
+		def __init__(self, title: str, parent=None):
+			super().__init__(parent)
+			self.setWindowTitle(title)
+			self.resize(800, 500)
+			self.setModal(True)
+
+			layout = QtWidgets.QVBoxLayout(self)
+
+			# Terminal-like output area
+			self.output = QtWidgets.QTextEdit()
+			self.output.setReadOnly(True)
+			self.output.setStyleSheet("""
+				QTextEdit {
+					background-color: #1e1e1e;
+					color: #00ff00;
+					font-family: 'Courier New', monospace;
+					font-size: 10pt;
+					padding: 8px;
+					border: 1px solid #333;
+				}
+			""")
+			layout.addWidget(self.output)
+
+			# Close button
+			btn_close = QtWidgets.QPushButton('Fechar')
+			btn_close.clicked.connect(self.accept)
+			layout.addWidget(btn_close)
+
+		def append_line(self, text: str):
+			"""Append a line to the terminal output."""
+			self.output.append(text)
+			# auto-scroll to bottom
+			scrollbar = self.output.verticalScrollBar()
+			scrollbar.setValue(scrollbar.maximum())
+
+
 	class MainWindow(QtWidgets.QMainWindow):
 		def __init__(self, modules, profiles, logger, installer=None):
 			super().__init__()
@@ -153,15 +191,27 @@ try:
 			if not self.installer:
 				self.append_log('Installer não disponível')
 				return
-			self.append_log(f"Iniciando instalação: {module.get('name')}")
-			self.installer.install_module(module, on_line=self.append_log, ask_password=self._ask_sudo_password)
+
+			name = module.get('name')
+			term = TerminalDialog(f"Instalando: {name}", parent=self)
+			term.append_line(f">>> Iniciando instalação: {name}")
+			term.append_line("")
+
+			self.installer.install_module(module, on_line=term.append_line, ask_password=self._ask_sudo_password)
+			term.exec()
 
 		def _validate_module(self, module):
 			if not self.installer:
 				self.append_log('Installer não disponível')
 				return
-			self.append_log(f"Validando: {module.get('name')}")
-			self.installer.validate_module(module, on_line=self.append_log, ask_password=self._ask_sudo_password)
+
+			name = module.get('name')
+			term = TerminalDialog(f"Validando: {name}", parent=self)
+			term.append_line(f">>> Iniciando validação: {name}")
+			term.append_line("")
+
+			self.installer.validate_module(module, on_line=term.append_line, ask_password=self._ask_sudo_password)
+			term.exec()
 
 		def _on_profile_selected(self, current, previous):
 			self.profile_modules_list.clear()
@@ -220,7 +270,14 @@ try:
 				self.append_log('Nenhum perfil selecionado ou instalador ausente')
 				return
 			profile = it.data(QtCore.Qt.UserRole)
-			self.installer.install_profile(profile, self.modules_by_id, on_line=self.append_log, ask_password=self._ask_sudo_password)
+
+			name = profile.get('name', 'Perfil')
+			term = TerminalDialog(f"Instalando Perfil: {name}", parent=self)
+			term.append_line(f">>> Iniciando instalação do perfil: {name}")
+			term.append_line("")
+
+			self.installer.install_profile(profile, self.modules_by_id, on_line=term.append_line, ask_password=self._ask_sudo_password)
+			term.exec()
 
 		def _ask_sudo_password(self, prompt: str) -> Optional[str]:
 			# If called from GUI thread, show dialog directly
