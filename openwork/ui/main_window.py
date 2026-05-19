@@ -48,6 +48,11 @@ try:
 			btn_layout.addWidget(btn_close)
 			
 			layout.addLayout(btn_layout)
+			
+			# Timer for polling completion event
+			self.completion_timer = QtCore.QTimer()
+			self.completion_timer.timeout.connect(self._check_completion)
+			self.completion_event = None
 
 		def append_line(self, text: str):
 			"""Append a line to the terminal output."""
@@ -62,6 +67,18 @@ try:
 			
 			# Process events to keep UI responsive
 			QtCore.QCoreApplication.processEvents()
+
+		def set_completion_event(self, event):
+			"""Register a threading.Event that signals when operation is complete.
+			When the event is set, the dialog will auto-close."""
+			self.completion_event = event
+			self.completion_timer.start(100)  # Poll every 100ms
+
+		def _check_completion(self):
+			"""Check if completion event is set, and close dialog if so."""
+			if self.completion_event and self.completion_event.is_set():
+				self.completion_timer.stop()
+				self.accept()
 
 
 	class MainWindow(QtWidgets.QMainWindow):
@@ -216,7 +233,8 @@ try:
 			term.append_line(f">>> Iniciando instalação: {name}")
 			term.append_line("")
 
-			self.installer.install_module(module, on_line=term.append_line, ask_password=self._ask_sudo_password)
+			done_event = self.installer.install_module(module, on_line=term.append_line, ask_password=self._ask_sudo_password)
+			term.set_completion_event(done_event)
 			term.exec()
 
 		def _validate_module(self, module):
@@ -229,7 +247,8 @@ try:
 			term.append_line(f">>> Iniciando validação: {name}")
 			term.append_line("")
 
-			self.installer.validate_module(module, on_line=term.append_line, ask_password=self._ask_sudo_password)
+			done_event = self.installer.validate_module(module, on_line=term.append_line, ask_password=self._ask_sudo_password)
+			term.set_completion_event(done_event)
 			term.exec()
 
 		def _on_profile_selected(self, current, previous):
@@ -295,7 +314,8 @@ try:
 			term.append_line(f">>> Iniciando instalação do perfil: {name}")
 			term.append_line("")
 
-			self.installer.install_profile(profile, self.modules_by_id, on_line=term.append_line, ask_password=self._ask_sudo_password)
+			done_event = self.installer.install_profile(profile, self.modules_by_id, on_line=term.append_line, ask_password=self._ask_sudo_password)
+			term.set_completion_event(done_event)
 			term.exec()
 
 		def _ask_sudo_password(self, prompt: str) -> Optional[str]:
