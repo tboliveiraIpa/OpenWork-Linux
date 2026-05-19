@@ -12,37 +12,56 @@ try:
 		def __init__(self, title: str, parent=None):
 			super().__init__(parent)
 			self.setWindowTitle(title)
-			self.resize(800, 500)
+			self.resize(900, 550)
 			self.setModal(True)
 
 			layout = QtWidgets.QVBoxLayout(self)
+			layout.setContentsMargins(0, 0, 0, 0)
 
-			# Terminal-like output area
-			self.output = QtWidgets.QTextEdit()
+			# Terminal-like output area with better styling
+			self.output = QtWidgets.QPlainTextEdit()
 			self.output.setReadOnly(True)
+			self.output.setMaximumBlockCount(5000)  # Keep last 5000 lines to prevent memory issues
+			
+			# Use a monospace font
+			font = QtGui.QFont("Courier New")
+			font.setPointSize(9)
+			self.output.setFont(font)
+			
+			# Apply dark theme
 			self.output.setStyleSheet("""
-				QTextEdit {
+				QPlainTextEdit {
 					background-color: #1e1e1e;
 					color: #00ff00;
-					font-family: 'Courier New', monospace;
-					font-size: 10pt;
 					padding: 8px;
-					border: 1px solid #333;
+					border: none;
 				}
 			""")
 			layout.addWidget(self.output)
 
-			# Close button
+			# Bottom controls
+			btn_layout = QtWidgets.QHBoxLayout()
+			btn_layout.addStretch()
+			
 			btn_close = QtWidgets.QPushButton('Fechar')
 			btn_close.clicked.connect(self.accept)
-			layout.addWidget(btn_close)
+			btn_layout.addWidget(btn_close)
+			
+			layout.addLayout(btn_layout)
 
 		def append_line(self, text: str):
 			"""Append a line to the terminal output."""
-			self.output.append(text)
-			# auto-scroll to bottom
+			cursor = self.output.textCursor()
+			cursor.movePosition(QtGui.QTextCursor.End)
+			self.output.setTextCursor(cursor)
+			self.output.insertPlainText(text + "\n")
+			
+			# Auto-scroll to bottom
 			scrollbar = self.output.verticalScrollBar()
 			scrollbar.setValue(scrollbar.maximum())
+			
+			# Process events to keep UI responsive
+			QtCore.QCoreApplication.processEvents()
 
 
 	class MainWindow(QtWidgets.QMainWindow):
