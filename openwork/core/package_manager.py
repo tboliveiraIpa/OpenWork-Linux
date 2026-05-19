@@ -1,7 +1,7 @@
 import subprocess
 import shutil
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional, Callable
 
 
 class BasePackageManager(ABC):
