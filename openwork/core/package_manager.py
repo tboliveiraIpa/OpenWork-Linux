@@ -49,7 +49,9 @@ class AptPackageManager(BasePackageManager):
 
 	def install(self, packages: List[str], on_line: Optional[Callable[[str], None]] = None,
 				ask_password: Optional[Callable[[str], str]] = None) -> bool:
-		cmd = "sudo apt-get install -y " + " ".join(packages)
+		# Use flags to ensure output is shown: -y (auto yes), without quiet flags
+		# DEBIAN_FRONTEND=noninteractive avoids interactive prompts
+		cmd = "DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends " + " ".join(packages)
 		# try to use Executor interactive if available to capture prompts
 		try:
 			from .executor import Executor
